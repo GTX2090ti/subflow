@@ -1,0 +1,68 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8099,
+    "poll_interval": 2.0
+  },
+  "qbittorrent": {
+    "url": "http://127.0.0.1:8080",
+    "api_key": "",
+    "conf_path": "",
+    "save_map": "/downloads=/path/to/downloads",
+    "timeout": 15
+  },
+  "downloaders": [],
+  "cookiecloud": {
+    "url": "http://127.0.0.1:8188",
+    "uuid": "",
+    "password": "",
+    "cache_ttl": 300,
+    "timeout": 20
+  },
+  "download": {
+    "scan_days": 30,
+    "req_interval": 1.5,
+    "timeout": 20,
+    "workers": 3,
+    "extract_zip": true,
+    "keep_archive": true,
+    "max_subs_per_job": 0,
+    "manual_save_dir": "/path/to/downloads/PT",
+    "legacy_state_file": "",
+    "sub_exts": [".srt", ".ass", ".ssa", ".sub", ".idx", ".sup", ".vtt", ".smi"]
+  },
+  "sites": {
+    "enabled": true,
+    "overrides": {}
+  },
+  "auth": {
+    "enabled": false,
+    "username": "admin",
+    "password": "",
+    "realm": "SubFlow",
+    "allow_localhost": true
+  },
+  "schedule": {
+    "enabled": false,
+    "interval_hours": 12,
+    "days": 3,
+    "limit": 0,
+    "refresh_cookie": false
+  },
+  "missing": {
+    "video_exts": [".mkv", ".mp4", ".avi", ".ts", ".m2ts", ".mov", ".wmv",
+                   ".flv", ".rmvb", ".webm", ".m4v", ".mpg", ".mpeg", ".vob"],
+    "max_depth": 2,
+    "max_files": 3000
+  },
+  "log": {
+    "level": "INFO",
+    "retain_days": 30,
+    "page_size": 500
+  },
+  "proxy": {
+    "enabled": false,
+    "http": "",
+    "https": ""
+  }
+}

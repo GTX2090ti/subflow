@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+data/
+*.db
+*.db-wal
+*.db-shm
+config.json
+.git/
+.venv/
+venv/
+probe_cc.py
+*.log

@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SubFlow · PT 字幕下载</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='20' font-size='20'>🎬</text></svg>">
+</head>
+<body>
+
+<!-- ================= 图标库（全部内联 SVG，不使用 emoji） ================= -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="g-stroke" fill="none" stroke="currentColor" stroke-width="1.9"
+       stroke-linecap="round" stroke-linejoin="round"></g>
+  </defs>
+  <symbol id="i-logo" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.5" y="4.5" width="19" height="13" rx="2.5"/><path d="M7 21h10M12 17.5V21"/><path d="M9.5 9.2v4.1l3.6-2.05z"/></g></symbol>
+  <symbol id="i-dash" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="7.5" height="8.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="5.5" rx="1.6"/>
+    <rect x="3" y="15" width="7.5" height="6" rx="1.6"/><rect x="13.5" y="12" width="7.5" height="9" rx="1.6"/></g></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.2 12a8.8 8.8 0 1 0 2.7-6.4"/><path d="M3 3.5V8h4.5"/><path d="M12 7.5V12l3 1.8"/></g></symbol>
+  <symbol id="i-logs" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.6" y="4" width="18.8" height="16" rx="2.4"/><path d="M6.6 9.2l2.4 2.2-2.4 2.2M11.6 14h6"/></g></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3.1"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6h.09A1.7 1.7 0 0 0 10 3.05V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></g></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 8V5.5A2.5 2.5 0 0 1 5.5 3H8M16 3h2.5A2.5 2.5 0 0 1 21 5.5V8M21 16v2.5a2.5 2.5 0 0 1-2.5 2.5H16M8 21H5.5A2.5 2.5 0 0 1 3 18.5V16"/><circle cx="12" cy="12" r="3.2"/></g></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></g></symbol>
+  <symbol id="i-first" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 5.5L11 12l6.5 6.5"/><path d="M7 5.5v13"/></g></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5.5L8.5 12 15 18.5"/></g></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5.5L15.5 12 9 18.5"/></g></symbol>
+  <symbol id="i-last" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 5.5L13 12l-6.5 6.5"/><path d="M17 5.5v13"/></g></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v3.5A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5V15M7.2 10.5L12 15.3l4.8-4.8M12 15V3"/></g></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M21 3.5V9h-5.4"/></g></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 6.5h17M9 6.5V4.6A1.6 1.6 0 0 1 10.6 3h2.8A1.6 1.6 0 0 1 15 4.6v1.9M5.5 6.5l1 13A1.7 1.7 0 0 0 8.2 21h7.6a1.7 1.7 0 0 0 1.7-1.5l1-13"/></g></symbol>
+  <symbol id="i-csv" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5"/><path d="M9 13.5h6M9 17h4"/></g></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.8l4.6 4.4L19.5 6.6"/></g></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/><path d="M12 7.6v5M12 16.1h.01"/></g></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/><path d="M12 16.4v-5M12 7.9h.01"/></g></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/><path d="M12 7v5.3l3.4 2"/></g></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3l8.5 4.6L12 12.2 3.5 7.6z"/><path d="M3.5 12.4L12 17l8.5-4.6M3.5 16.8L12 21.4l8.5-4.6"/></g></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="10.8" cy="10.8" r="7.3"/><path d="M16.2 16.2L21 21"/></g></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6.5 4.6l12 7.4-12 7.4z"/></g></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19.5 21h-15A1.5 1.5 0 0 1 3 19.5v-15A1.5 1.5 0 0 1 4.5 3H16l5 5v11.5A1.5 1.5 0 0 1 19.5 21z"/><path d="M7.5 3v5h7M7.5 21v-6h9v6"/></g></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10.5 13.5a4.4 4.4 0 0 0 6.4 0l2.6-2.6a4.4 4.4 0 1 0-6.2-6.2L11.6 6.4"/><path d="M13.5 10.5a4.4 4.4 0 0 0-6.4 0l-2.6 2.6a4.4 4.4 0 1 0 6.2 6.2l1.7-1.7"/></g></symbol>
+  <symbol id="i-cookie" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 12.4A9 9 0 1 1 11.6 3a3.6 3.6 0 0 0 4.1 4.5A3.6 3.6 0 0 0 21 12.4z"/><path d="M8.6 9h.01M8.6 15h.01M13 13.5h.01"/></g></symbol>
+  <symbol id="i-zone" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 6h10M3.5 11.5h10M3.5 17h6"/><path d="M18 12.5V21M15.2 18.2L18 21l2.8-2.8"/></g></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 21V4M5 4.8h10.5l-1.8 3.6 1.8 3.6H5"/></g></symbol>
+  <symbol id="i-missing" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.5" y="5" width="19" height="14" rx="2.2"/><path d="M7.5 5v14M16.5 5v14"/>
+    <path d="M12 9.2v3.4M12 15.8h.01"/></g></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 20.5h17"/><rect x="5" y="11.5" width="3.6" height="6.5" rx="1"/>
+    <rect x="10.2" y="6.5" width="3.6" height="11.5" rx="1"/>
+    <rect x="15.4" y="9" width="3.6" height="9" rx="1"/></g></symbol>
+</svg>
+
+<div class="app">
+  <!-- ================= 顶栏 ================= -->
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo"><use href="#i-logo"/></svg>
+      SubFlow<small id="ver">v-</small>
+    </div>
+
+    <nav class="tabs" id="tabs">
+      <div class="tab active" data-view="dash"><svg><use href="#i-dash"/></svg>任务台</div>
+      <div class="tab" data-view="zone"><svg><use href="#i-zone"/></svg>字幕区</div>
+      <div class="tab" data-view="missing"><svg><use href="#i-missing"/></svg>缺字幕</div>
+      <div class="tab" data-view="stats"><svg><use href="#i-chart"/></svg>统计</div>
+      <div class="tab" data-view="history"><svg><use href="#i-history"/></svg>历史记录</div>
+      <div class="tab" data-view="logs"><svg><use href="#i-logs"/></svg>日志</div>
+      <div class="tab" data-view="settings"><svg><use href="#i-settings"/></svg>设置</div>
+    </nav>
+
+    <div class="topbar-right">
+      <span class="pill" id="pill-qb" title="qBittorrent 连接状态"><i class="dot"></i><span>qBittorrent</span></span>
+      <span class="pill" id="pill-cc" title="CookieCloud 连接状态"><i class="dot"></i><span>CookieCloud</span></span>
+      <button class="btn primary" id="btn-scan-top"><svg><use href="#i-scan"/></svg>扫描种子库</button>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <!-- ============================================================ 任务台 -->
+    <section class="view active" id="view-dash">
+
+      <div class="grid c4" style="margin-bottom:16px">
+        <div class="stat accent"><div class="k"><svg><use href="#i-layers"/></svg>任务总数</div><div class="v" id="s-total">-</div><div class="sub" id="s-total-sub">累计记录</div></div>
+        <div class="stat ok"><div class="k"><svg><use href="#i-check"/></svg>成功下载</div><div class="v" id="s-ok">-</div><div class="sub" id="s-ok-sub">含已存在</div></div>
+        <div class="stat warn"><div class="k"><svg><use href="#i-clock"/></svg>待处理 / 进行中</div><div class="v" id="s-pending">-</div><div class="sub" id="s-pending-sub">队列状态</div></div>
+        <div class="stat err"><div class="k"><svg><use href="#i-alert"/></svg>失败</div><div class="v" id="s-fail">-</div><div class="sub" id="s-fail-sub">可批量重试</div></div>
+      </div>
+
+      <div class="card">
+        <h2><svg><use href="#i-scan"/></svg>扫描种子库
+          <span class="hint">按分类 / 时间窗口筛选下载器里的种子，反查站点详情页，自动建字幕下载任务</span>
+        </h2>
+
+        <div class="grid c2">
+          <div>
+            <label class="field"><span>参与扫描的站点<em>不选则扫描全部已启用站点</em></span></label>
+            <div class="chips" id="scan-sites"></div>
+
+            <label class="field" style="margin-top:16px"><span>下载器分类
+              <em>勾选后只扫描这些分类下的种子；「按分类批量下载」会忽略时间窗口做全量处理</em></span></label>
+            <div class="row" style="margin-bottom:8px">
+              <button class="btn sm" id="btn-cat-load"><svg><use href="#i-refresh"/></svg>读取分类</button>
+              <button class="btn sm" id="btn-cat-clear">清空选择</button>
+              <span class="muted" id="cat-stat" style="font-size:12px">尚未读取</span>
+            </div>
+            <div id="scan-cats"></div>
+
+            <div class="row" style="margin-top:16px">
+              <label class="field" style="margin:0;width:130px">
+                <span>时间窗口（天）</span>
+                <input type="number" id="scan-days" min="1" max="3650" value="30">
+              </label>
+              <label class="field" style="margin:0;width:150px">
+                <span>最多检查（0=不限）</span>
+                <input type="number" id="scan-limit" min="0" value="0">
+              </label>
+              <label class="switch" style="margin-top:18px">
+                <input type="checkbox" id="scan-dry"><span class="track"></span><span>演练模式</span>
+              </label>
+              <label class="switch" style="margin-top:18px">
+                <input type="checkbox" id="scan-refresh"><span class="track"></span><span>强制刷新 Cookie</span>
+              </label>
+            </div>
+
+            <div class="row" style="margin-top:16px">
+              <button class="btn primary" id="btn-scan"><svg><use href="#i-scan"/></svg>开始扫描</button>
+              <button class="btn primary" id="btn-scan-cat"><svg><use href="#i-down"/></svg>按分类批量下载</button>
+              <button class="btn" id="btn-run-pending"><svg><use href="#i-play"/></svg>执行待处理</button>
+              <button class="btn" id="btn-retry-failed"><svg><use href="#i-refresh"/></svg>重试全部失败</button>
+            </div>
+          </div>
+
+          <div>
+            <label class="field"><span>扫描状态</span></label>
+            <div style="background:var(--bg-elev);border:1px solid var(--border);border-radius:8px;padding:13px 15px">
+              <div class="row" style="margin-bottom:10px">
+                <span class="badge" id="scan-badge">空闲</span>
+                <span class="muted" id="scan-phase" style="font-size:12px">尚未运行</span>
+                <span class="spacer"></span>
+                <span class="muted mono" id="scan-count" style="font-size:12px"></span>
+              </div>
+              <div class="progress" id="scan-progress"><i></i></div>
+              <div id="scan-result" class="muted" style="font-size:12px;margin-top:11px;line-height:1.7"></div>
+            </div>
+
+            <div style="margin-top:14px">
+              <label class="field"><span>运行环境</span></label>
+              <dl class="kv-list">
+                <dt>qBittorrent</dt><dd id="env-qb">-</dd>
+                <dt>CookieCloud</dt><dd id="env-cc">-</dd>
+                <dt>队列 / 执行中</dt><dd id="env-queue">-</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <details class="fold" style="margin-bottom:16px">
+        <summary><svg style="width:15px;height:15px"><use href="#i-plus"/></svg>手动提交任务（种子级：按种子 ID 精确抓取详情页上的字幕包）</summary>
+        <div class="body">
+          <div class="grid c2">
+            <div>
+              <label class="field"><span>站点</span>
+                <select id="sub-site"></select>
+              </label>
+              <label class="field"><span>种子 ID 或详情页链接<em>每行一个，可批量</em></span>
+                <textarea id="sub-target" rows="6" placeholder="43480&#10;https://kamept.com/details.php?id=43481&#10;https://kamept.com/downloadsubs.php?torrentid=43482&subid=9182"></textarea>
+              </label>
+            </div>
+            <div>
+              <label class="field"><span>保存目录<em>留空则用设置中的默认目录</em></span>
+                <input type="text" id="sub-dir" placeholder="/path/to/downloads/PT/字幕">
+              </label>
+              <div class="row">
+                <label class="switch"><input type="checkbox" id="sub-refresh"><span class="track"></span><span>强制刷新 Cookie</span></label>
+              </div>
+              <div class="row" style="margin-top:14px">
+                <button class="btn primary" id="btn-submit"><svg><use href="#i-plus"/></svg>提交任务</button>
+              </div>
+              <div id="sub-result" class="muted" style="font-size:12px;margin-top:12px;line-height:1.7"></div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <div class="card">
+        <h2><svg><use href="#i-layers"/></svg>任务列表
+          <span class="hint" id="jobs-hint"></span>
+          <span class="spacer" style="flex:1"></span>
+        </h2>
+        <div class="row" style="margin-bottom:12px">
+          <select id="job-status" style="width:auto">
+            <option value="all">全部状态</option>
+            <option value="running">进行中</option>
+            <option value="pending">待处理</option>
+            <option value="success">成功</option>
+            <option value="failed">失败</option>
+            <option value="exists">已存在</option>
+          </select>
+          <select id="job-site" style="width:auto"><option value="all">全部站点</option></select>
+          <select id="job-category" style="width:auto"><option value="">全部分类</option></select>
+          <input type="text" id="job-keyword" placeholder="搜索视频名 / 字幕名" style="width:230px">
+          <button class="btn sm" id="btn-job-refresh"><svg><use href="#i-refresh"/></svg>刷新</button>
+          <label class="switch"><input type="checkbox" id="auto-refresh" checked><span class="track"></span><span>自动刷新</span></label>
+        </div>
+        <div class="pager pager-3 pager-top" data-pager="jobs">
+          <span class="muted" data-role="range">-</span>
+          <div class="page-nav">
+            <button class="btn sm pg-arrow" data-role="first" title="第一页"><svg><use href="#i-first"/></svg></button>
+            <button class="btn sm pg-arrow" data-role="prev" title="上一页"><svg><use href="#i-prev"/></svg></button>
+            <span class="page-nums" data-role="pages"></span>
+            <button class="btn sm pg-arrow" data-role="next" title="下一页"><svg><use href="#i-next"/></svg></button>
+            <button class="btn sm pg-arrow" data-role="last" title="最后一页"><svg><use href="#i-last"/></svg></button>
+          </div>
+          <div class="page-size">
+            <select data-role="size" style="width:auto">
+              <option value="20">20 条/页</option>
+              <option value="50" selected>50 条/页</option>
+              <option value="100">100 条/页</option>
+              <option value="200">200 条/页</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th class="nowrap">编号</th><th class="nowrap">状态</th><th class="nowrap">站点</th>
+              <th>视频名称</th><th>字幕包</th><th class="nowrap">分类</th><th class="nowrap">大小</th>
+              <th class="nowrap">耗时</th><th class="nowrap">更新时间</th><th class="nowrap">操作</th>
+            </tr></thead>
+            <tbody id="jobs-body"><tr><td colspan="10" class="empty">加载中…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pager pager-3" data-pager="jobs">
+          <span class="muted" data-role="range">-</span>
+          <div class="page-nav">
+            <button class="btn sm pg-arrow" data-role="first" title="第一页"><svg><use href="#i-first"/></svg></button>
+            <button class="btn sm pg-arrow" data-role="prev" title="上一页"><svg><use href="#i-prev"/></svg></button>
+            <span class="page-nums" data-role="pages"></span>
+            <button class="btn sm pg-arrow" data-role="next" title="下一页"><svg><use href="#i-next"/></svg></button>
+            <button class="btn sm pg-arrow" data-role="last" title="最后一页"><svg><use href="#i-last"/></svg></button>
+          </div>
+          <div class="page-size">
+            <select data-role="size" style="width:auto">
+              <option value="20">20 条/页</option>
+              <option value="50" selected>50 条/页</option>
+              <option value="100">100 条/页</option>
+              <option value="200">200 条/页</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 字幕区（站点级） -->
+    <section class="view" id="view-zone">
+      <div class="card">
+        <h2><svg><use href="#i-zone"/></svg>站点字幕区
+          <span class="hint">站点维护的字幕汇总页：跨种子罗列，包含种子已删除但仍留在站内的历史字幕</span>
+        </h2>
+
+        <div class="row" style="margin-bottom:14px">
+          <label class="field" style="margin:0;width:190px">
+            <span>站点</span>
+            <select id="zone-site"></select>
+          </label>
+          <label class="field" style="margin:0;width:150px">
+            <span>读取页数<em>0 = 翻到最后一页</em></span>
+            <input type="number" id="zone-pages" min="0" value="1">
+          </label>
+          <label class="field" style="margin:0;width:230px">
+            <span>关键词过滤<em>服务端按标题匹配</em></span>
+            <input type="text" id="zone-keyword" placeholder="视频名 / 字幕名片段">
+          </label>
+          <label class="switch" style="margin-top:18px">
+            <input type="checkbox" id="zone-refresh"><span class="track"></span><span>强制刷新 Cookie</span>
+          </label>
+          <button class="btn primary" style="margin-top:18px" id="btn-zone-load">
+            <svg><use href="#i-refresh"/></svg>读取字幕区
+          </button>
+        </div>
+
+        <div style="background:var(--bg-elev);border:1px solid var(--border);border-radius:8px;padding:12px 15px">
+          <div class="row">
+            <span class="badge" id="zone-badge">未读取</span>
+            <span class="muted" id="zone-stat" style="font-size:12px">选择站点后点击「读取字幕区」</span>
+            <span class="spacer"></span>
+            <span class="muted mono" id="zone-elapsed" style="font-size:12px"></span>
+          </div>
+          <div id="zone-errors" class="muted" style="font-size:12px;margin-top:9px;line-height:1.7"></div>
+        </div>
+
+        <div class="row" style="margin-top:16px">
+          <label class="switch">
+            <input type="checkbox" id="zone-all"><span class="track"></span><span>全选当前结果</span>
+          </label>
+          <span class="muted" id="zone-picked" style="font-size:12px">已选 0 条</span>
+          <span class="spacer"></span>
+          <input type="text" id="zone-dir" placeholder="未命中本地种子的条目保存到此目录"
+                 style="width:320px">
+          <button class="btn primary" id="btn-zone-submit">
+            <svg><use href="#i-down"/></svg>下载选中
+          </button>
+        </div>
+        <div class="muted" style="font-size:12px;margin-top:8px;line-height:1.7">
+          命中本地种子的条目会直接落到该视频所在目录；未命中的用右侧目录。
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><svg><use href="#i-layers"/></svg>字幕条目
+          <span class="hint" id="zone-hint"></span>
+        </h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th class="nowrap" style="width:38px"></th>
+              <th class="nowrap">站点</th><th class="nowrap">语言</th>
+              <th>字幕标题</th><th>本地匹配的视频</th>
+              <th class="nowrap">大小</th><th class="nowrap">发布于</th>
+              <th class="nowrap">任务状态</th>
+              <th class="nowrap">tid / subid</th>
+            </tr></thead>
+            <tbody id="zone-body">
+              <tr><td colspan="9" class="empty">尚未读取，点击上方「读取字幕区」</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 缺字幕 -->
+    <section class="view" id="view-missing">
+      <div class="card">
+        <h2><svg><use href="#i-missing"/></svg>缺字幕清单
+          <span class="hint">逐个种子检查视频目录，列出还没有对应字幕的视频</span>
+        </h2>
+
+        <div class="row" style="margin-bottom:12px">
+          <label class="field" style="margin:0;width:130px">
+            <span>时间窗口（天）</span>
+            <input type="number" id="miss-days" min="0" value="30">
+          </label>
+          <label class="field" style="margin:0;width:150px">
+            <span>最多列出<em>0 = 不限</em></span>
+            <input type="number" id="miss-limit" min="0" value="200">
+          </label>
+          <input type="text" id="miss-keyword" placeholder="视频名关键词" style="width:220px">
+          <label class="switch" style="margin-top:18px">
+            <input type="checkbox" id="miss-matched"><span class="track"></span><span>仅列可补字幕的种子</span>
+          </label>
+          <button class="btn primary" style="margin-top:18px" id="btn-miss-scan">
+            <svg><use href="#i-search"/></svg>开始检查
+          </button>
+          <span class="spacer"></span>
+          <span class="muted mono" id="miss-elapsed" style="font-size:12px"></span>
+        </div>
+
+        <div style="background:var(--bg-elev);border:1px solid var(--border);border-radius:8px;padding:12px 15px">
+          <div class="row">
+            <span class="badge" id="miss-badge">未检查</span>
+            <span class="muted" id="miss-stat" style="font-size:12px">点击「开始检查」扫描本地视频文件</span>
+          </div>
+          <div id="miss-errors" class="muted" style="font-size:12px;margin-top:9px;line-height:1.7"></div>
+        </div>
+        <div class="muted" style="font-size:12px;margin-top:8px;line-height:1.7">
+          判定规则：视频同目录、Subs/Subtitles 子目录或同名子目录里，存在同名素材
+          （<span class="mono">视频名.srt</span> / <span class="mono">视频名.chs.ass</span>）即视为已有字幕。
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><svg><use href="#i-layers"/></svg>缺字幕种子
+          <span class="hint" id="miss-hint"></span>
+        </h2>
+        <div class="row" style="margin-bottom:12px">
+          <label class="switch">
+            <input type="checkbox" id="miss-all"><span class="track"></span><span>全选可补字幕项</span>
+          </label>
+          <span class="muted" id="miss-picked" style="font-size:12px">已选 0 个种子</span>
+          <span class="spacer"></span>
+          <button class="btn primary" id="btn-miss-repair">
+            <svg><use href="#i-down"/></svg>一键补字幕
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th class="nowrap" style="width:38px"></th>
+              <th>视频 / 种子</th>
+              <th class="nowrap">下载器 · 分类</th>
+              <th class="nowrap">缺失字幕</th>
+              <th class="nowrap">加入时间</th>
+              <th class="nowrap">站点 / 种子</th>
+              <th>保存路径</th>
+            </tr></thead>
+            <tbody id="miss-body">
+              <tr><td colspan="7" class="empty">尚未检查，点击上方「开始检查」</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="muted" style="font-size:12px;margin-top:8px;line-height:1.7">
+          补字幕按「站点 + 种子」重新抓取详情页上的字幕包，已成功下载过的会自动跳过；
+          未命中站点的种子只能手工提交。
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 统计 -->
+    <section class="view" id="view-stats">
+      <div class="card">
+        <h2><svg><use href="#i-chart"/></svg>统计面板
+          <span class="hint">按任务完成时间统计，未完成的按创建时间计入</span>
+        </h2>
+
+        <div class="row" style="margin-bottom:14px">
+          <select id="stats-days" style="width:auto">
+            <option value="7">近 7 天</option>
+            <option value="30" selected>近 30 天</option>
+            <option value="90">近 90 天</option>
+            <option value="365">近 365 天</option>
+          </select>
+          <button class="btn sm" id="btn-stats-refresh"><svg><use href="#i-refresh"/></svg>刷新</button>
+          <span class="spacer"></span>
+          <span class="muted mono" id="stats-range" style="font-size:12px"></span>
+        </div>
+
+        <div class="grid c4" style="margin-bottom:16px">
+          <div class="stat ok"><div class="k"><svg><use href="#i-check"/></svg>成功（含已存在）</div>
+            <div class="v" id="st-ok">-</div><div class="sub" id="st-ok-sub">-</div></div>
+          <div class="stat err"><div class="k"><svg><use href="#i-alert"/></svg>失败</div>
+            <div class="v" id="st-fail">-</div><div class="sub" id="st-fail-sub">-</div></div>
+          <div class="stat accent"><div class="k"><svg><use href="#i-layers"/></svg>下载总量</div>
+            <div class="v" id="st-size">-</div><div class="sub" id="st-size-sub">-</div></div>
+          <div class="stat warn"><div class="k"><svg><use href="#i-clock"/></svg>平均耗时</div>
+            <div class="v" id="st-avg">-</div><div class="sub" id="st-avg-sub">-</div></div>
+        </div>
+
+        <div class="chart-head">
+          <span>每日任务量</span>
+          <span class="legend">
+            <i class="lg ok"></i>成功<i class="lg err"></i>失败<i class="lg skip"></i>跳过
+          </span>
+        </div>
+        <div class="chart" id="stats-daily"></div>
+        <div class="muted mono" id="stats-daily-hint" style="font-size:11.5px;margin-top:6px"></div>
+      </div>
+
+      <div class="grid c2">
+        <div class="card">
+          <h2><svg><use href="#i-link"/></svg>按站点</h2>
+          <div id="stats-sites" class="stat-list"></div>
+        </div>
+        <div class="card">
+          <h2><svg><use href="#i-alert"/></svg>失败原因</h2>
+          <div id="stats-failures" class="stat-list"></div>
+        </div>
+      </div>
+
+      <div class="grid c2">
+        <div class="card">
+          <h2><svg><use href="#i-flag"/></svg>按分类</h2>
+          <div id="stats-cats" class="stat-list"></div>
+        </div>
+        <div class="card">
+          <h2><svg><use href="#i-zone"/></svg>任务来源</h2>
+          <div id="stats-sources" class="stat-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 历史记录 -->
+    <section class="view" id="view-history">
+      <div class="card">
+        <h2><svg><use href="#i-history"/></svg>历史记录
+          <span class="hint">已进入终态的任务：来源网站 / 视频名称 / 时间 / 状态</span>
+        </h2>
+        <div class="row" style="margin-bottom:12px">
+          <select id="h-site" style="width:auto"><option value="all">全部站点</option></select>
+          <select id="h-status" style="width:auto">
+            <option value="all">全部状态</option>
+            <option value="success">成功</option>
+            <option value="failed">失败</option>
+            <option value="exists">已存在</option>
+            <option value="skipped">已跳过</option>
+          </select>
+          <input type="date" id="h-start" style="width:auto" title="起始日期">
+          <input type="date" id="h-end" style="width:auto" title="结束日期">
+          <input type="text" id="h-keyword" placeholder="搜索视频 / 字幕 / 文件名" style="width:250px">
+          <button class="btn sm primary" id="btn-h-search"><svg><use href="#i-search"/></svg>查询</button>
+          <button class="btn sm" id="btn-h-reset">重置</button>
+          <span class="spacer"></span>
+          <button class="btn sm" id="btn-h-export"><svg><use href="#i-csv"/></svg>导出 CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th class="nowrap">编号</th><th class="nowrap">完成时间</th><th class="nowrap">来源网站</th>
+              <th>视频名称</th><th>分类</th><th>字幕包</th><th>文件名</th>
+              <th class="nowrap">大小</th><th class="nowrap">状态</th><th>说明</th>
+            </tr></thead>
+            <tbody id="history-body"><tr><td colspan="10" class="empty">加载中…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <button class="btn sm" id="h-prev">上一页</button>
+          <button class="btn sm" id="h-next">下一页</button>
+          <span id="h-pageinfo">-</span>
+          <span class="spacer"></span>
+          <select id="h-pagesize" style="width:auto">
+            <option value="20">20 条/页</option>
+            <option value="50" selected>50 条/页</option>
+            <option value="100">100 条/页</option>
+            <option value="200">200 条/页</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 日志 -->
+    <section class="view" id="view-logs">
+      <div class="card">
+        <h2><svg><use href="#i-logs"/></svg>系统日志
+          <span class="hint">系统运行 · 任务执行 · 错误信息</span>
+        </h2>
+        <div class="log-toolbar">
+          <select id="log-level">
+            <option value="ALL">全部级别</option>
+            <option value="INFO">INFO</option>
+            <option value="WARN">WARN</option>
+            <option value="ERROR">ERROR</option>
+            <option value="FATAL">FATAL</option>
+          </select>
+          <select id="log-source"><option value="all">全部来源</option></select>
+          <input type="text" id="log-keyword" class="grow" placeholder="关键词过滤（服务端匹配）">
+          <button class="btn sm" id="btn-log-apply"><svg><use href="#i-search"/></svg>应用</button>
+          <label class="switch"><input type="checkbox" id="log-follow" checked><span class="track"></span><span>自动滚动</span></label>
+          <span class="spacer"></span>
+          <button class="btn sm" id="btn-log-download"><svg><use href="#i-down"/></svg>下载日志</button>
+          <button class="btn sm danger" id="btn-log-clear"><svg><use href="#i-trash"/></svg>清空</button>
+        </div>
+        <div class="logbox" id="logbox"></div>
+        <div class="row" style="margin-top:10px">
+          <span class="muted" id="log-stat" style="font-size:12px">-</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 设置 -->
+    <section class="view" id="view-settings">
+      <div class="grid c2">
+        <div class="card">
+          <h2><svg><use href="#i-down"/></svg>qBittorrent</h2>
+          <label class="field"><span>WebUI 地址</span><input type="text" id="cfg-qb-url"></label>
+          <label class="field"><span>API Key<em>留空表示不修改</em></span><input type="password" id="cfg-qb-key" placeholder="qbt_xxx"></label>
+          <label class="field"><span>qBittorrent.conf 路径<em>可从该文件读取 API Key</em></span><input type="text" id="cfg-qb-conf"></label>
+          <label class="field"><span>保存路径映射<em>容器内路径=宿主机路径，逗号分隔多组</em></span><input type="text" id="cfg-qb-map"></label>
+          <button class="btn primary" id="btn-save-qb"><svg><use href="#i-save"/></svg>保存</button>
+        </div>
+
+        <div class="card">
+          <h2><svg><use href="#i-cookie"/></svg>CookieCloud
+            <span class="hint">多站点的统一登录态来源</span>
+          </h2>
+          <label class="field"><span>服务地址</span><input type="text" id="cfg-cc-url"></label>
+          <label class="field"><span>用户 KEY（UUID）</span><input type="text" id="cfg-cc-uuid"></label>
+          <label class="field"><span>加密密码<em>留空表示不修改</em></span><input type="password" id="cfg-cc-pass" placeholder="••••••"></label>
+          <label class="field"><span>缓存时长（秒）</span><input type="number" id="cfg-cc-ttl" min="0"></label>
+          <div class="row">
+            <button class="btn primary" id="btn-save-cc"><svg><use href="#i-save"/></svg>保存</button>
+            <button class="btn" id="btn-cc-refresh"><svg><use href="#i-refresh"/></svg>立即刷新</button>
+          </div>
+          <div class="hr"></div>
+          <div id="cc-domains" class="muted" style="font-size:12.5px">尚未加载站点清单</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><svg><use href="#i-settings"/></svg>下载与日志</h2>
+        <div class="grid c4">
+          <label class="field"><span>扫描窗口（天）</span><input type="number" id="cfg-scan-days" min="1"></label>
+          <label class="field"><span>请求间隔（秒）</span><input type="number" id="cfg-interval" step="0.1" min="0"></label>
+          <label class="field"><span>并发下载线程</span><input type="number" id="cfg-workers" min="1" max="8"></label>
+          <label class="field"><span>日志保留（天）</span><input type="number" id="cfg-log-days" min="0"></label>
+        </div>
+        <label class="field"><span>手动提交默认保存目录</span><input type="text" id="cfg-manual-dir" placeholder="/path/to/downloads/PT"></label>
+        <div class="row">
+          <label class="switch"><input type="checkbox" id="cfg-extract"><span class="track"></span><span>zip 字幕包自动解压</span></label>
+          <label class="switch"><input type="checkbox" id="cfg-keep"><span class="track"></span><span>解压后保留压缩包</span></label>
+        </div>
+        <div class="hr"></div>
+        <button class="btn primary" id="btn-save-dl"><svg><use href="#i-save"/></svg>保存</button>
+      </div>
+
+      <div class="grid c2">
+        <div class="card">
+          <h2><svg><use href="#i-settings"/></svg>访问控制
+            <span class="hint">HTTP Basic 认证</span>
+          </h2>
+          <div class="row" style="margin-bottom:8px">
+            <label class="switch">
+              <input type="checkbox" id="cfg-auth-en"><span class="track"></span><span>启用认证</span>
+            </label>
+          </div>
+          <label class="field"><span>用户名</span>
+            <input type="text" id="cfg-auth-user" autocomplete="username">
+          </label>
+          <label class="field"><span>密码<em>留空表示不修改；密码为空时认证不生效</em></span>
+            <input type="password" id="cfg-auth-pass" autocomplete="new-password" placeholder="••••••">
+          </label>
+          <label class="field"><span>提示域（realm）</span>
+            <input type="text" id="cfg-auth-realm" placeholder="SubFlow">
+          </label>
+          <label class="switch"><input type="checkbox" id="cfg-auth-local">
+            <span class="track"></span><span>本机（127.0.0.1）免认证<em class="muted">容器健康检查依赖它</em></span></label>
+          <div class="hr"></div>
+          <button class="btn primary" id="btn-save-auth"><svg><use href="#i-save"/></svg>保存</button>
+        </div>
+
+        <div class="card">
+          <h2><svg><use href="#i-clock"/></svg>定时扫描
+            <span class="hint">进程内调度，重启后按 kv 记录续跑</span>
+          </h2>
+          <div class="row" style="margin-bottom:8px">
+            <label class="switch">
+              <input type="checkbox" id="cfg-sched-en"><span class="track"></span><span>启用定时扫描</span>
+            </label>
+          </div>
+          <div class="grid c2">
+            <label class="field"><span>间隔（小时）</span>
+              <input type="number" id="cfg-sched-hours" min="0.5" step="0.5">
+            </label>
+            <label class="field"><span>扫描窗口（天）</span>
+              <input type="number" id="cfg-sched-days" min="1">
+            </label>
+          </div>
+          <label class="field"><span>每次最多检查<em>0 = 不限</em></span>
+            <input type="number" id="cfg-sched-limit" min="0">
+          </label>
+          <label class="switch"><input type="checkbox" id="cfg-sched-refresh">
+            <span class="track"></span><span>每次强制刷新 Cookie</span></label>
+          <div class="hr"></div>
+          <dl class="kv-list">
+            <dt>上次运行</dt><dd id="sched-last">-</dd>
+            <dt>下次运行</dt><dd id="sched-next">-</dd>
+            <dt>上次结果</dt><dd id="sched-result">-</dd>
+            <dt>调度线程</dt><dd id="sched-thread">-</dd>
+          </dl>
+          <div class="hr"></div>
+          <button class="btn primary" id="btn-save-sched"><svg><use href="#i-save"/></svg>保存</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><svg><use href="#i-link"/></svg>站点开关
+          <span class="hint">关闭的站点不参与扫描；修改站点根地址可适配镜像域名</span>
+        </h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th class="nowrap">启用</th><th class="nowrap">站点</th><th class="nowrap">标识</th>
+              <th>站点根地址</th><th class="nowrap">CookieCloud 域名</th><th class="nowrap">Cookie 状态</th><th>说明</th>
+            </tr></thead>
+            <tbody id="sites-body"><tr><td colspan="7" class="empty">加载中…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn primary" id="btn-save-sites"><svg><use href="#i-save"/></svg>保存站点配置</button>
+          <span class="muted" style="font-size:12px" id="sites-hint"></span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

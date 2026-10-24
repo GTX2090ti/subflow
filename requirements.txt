@@ -1,0 +1,6 @@
+# SubFlow —— PT 字幕下载 Web UI
+# 运行时依赖（Python 3.10+）
+fastapi>=0.110
+uvicorn[standard]>=0.27
+requests>=2.31
+pycryptodome>=3.19
