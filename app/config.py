@@ -12,7 +12,7 @@ SubFlow 配置层
 示例：
     SUBFLOW_SERVER_PORT=8099
     SUBFLOW_QBITTORRENT_API_KEY=qbt_xxx
-    SUBFLOW_COOKIECLOUD_UUID=dwtagtZxQPF668ZM5MYWiu
+    SUBFLOW_COOKIECLOUD_UUID=0123456789abcdefghijkl
 
 敏感字段（api_key / password）在对外输出时统一脱敏，见 mask_secrets()。
 """
