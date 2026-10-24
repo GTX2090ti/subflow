@@ -31,14 +31,30 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - id: ver
+        run: |
+          V=$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' app/config.py)
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            T="${GITHUB_REF_NAME#v}"
+            if [ "$T" != "$V" ]; then
+              echo "tag v$T 与 app/config.py 的 APP_VERSION=$V 不一致" >&2
+              exit 1
+            fi
+          fi
+
       - id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=ref,event=tag
             type=sha,format=short
+          labels: |
+            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
 
       - uses: docker/build-push-action@v6
         with:
