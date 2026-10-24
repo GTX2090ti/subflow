@@ -48,8 +48,10 @@ echo "SUBFLOW_IMAGE=ghcr.io/gtx2090ti/subflow:latest" >> .env
 docker compose up -d --no-build
 ```
 
-镜像由 GitHub Actions 在每次推送到 `main` 时构建并推送（见 `.github/workflows/docker.yml`），
-打 `v*` 标签时额外生成同名版本标签。若 GHCR 包仍为私有，需先 `docker login ghcr.io`。
+镜像由 GitHub Actions 在每次推送到 `main` 时构建并推送到 GHCR（见 `.github/workflows/docker.yml`），
+公开可匿名拉取。除 `latest` 外，打 `v*` 标签会生成一组版本标签（`v1.1.0` → `1.1.0` / `1.1` / `v1.1.0`），
+标签版本必须与 `app/config.py` 的 `APP_VERSION` 一致，否则 CI 会直接失败。国内直连 GHCR 较慢时，
+可改用镜像加速站的前缀形式拉取。
 
 ---
 
