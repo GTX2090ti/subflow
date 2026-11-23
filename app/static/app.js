@@ -15,7 +15,7 @@ const S = {
   zone: { entries: [], picked: new Set(), site: 'all', loading: false },
   history: { site: 'all', status: 'all', keyword: '', start: '', end: '', page: 1, size: 50 },
   logs: { since: 0, level: 'ALL', source: 'all', keyword: '', count: 0 },
-  missing: { items: [], picked: new Set(), loading: false },
+  missing: { items: [], picked: new Set(), loading: false, probing: false, probeTimer: null },
   stats: { days: 30 },
   auth: { password_set: false },
   timer: null,
@@ -939,6 +939,8 @@ function bindEvents() {
     renderMissing();
   };
   $('btn-miss-repair').onclick = repairMissing;
+  $('btn-miss-probe').onclick = probeMissing;
+  $('miss-new-only').onchange = renderMissing;
 
   $('btn-stats-refresh').onclick = loadStats;
   $('stats-days').onchange = loadStats;
@@ -1113,15 +1115,66 @@ function missRepairable(it) {
 }
 
 function missSelectable() {
-  return (S.missing.items || []).filter(missRepairable);
+  return missVisibleItems().filter(missRepairable);
+}
+
+// 「只看新上字幕」勾选时，表格、全选与已选计数都只算可见行
+function missVisible(it) {
+  if (!$('miss-new-only').checked) return true;
+  return (it.site_check || {}).state === 'new';
+}
+
+function missVisibleItems() {
+  return (S.missing.items || []).filter(missVisible);
+}
+
+// site_check.checked_at 可能是 ISO 字符串，也可能是 epoch 秒
+function missCheckedAt(v) {
+  if (!v) return '';
+  return typeof v === 'number' ? fmtUnix(v) : fmtTime(v);
+}
+
+// titles 元素按字符串渲染，兼容后端给对象形式的情况
+function missTitleText(t) {
+  if (t == null) return '';
+  if (typeof t === 'string') return t;
+  return t.title || t.name || '';
+}
+
+function missSiteCell(it) {
+  const sc = it.site_check;
+  if (!sc || !sc.state) {
+    return '<td class="nowrap"><span class="muted">未复查</span></td>';
+  }
+  let cls = '';
+  let label = '未复查';
+  if (sc.state === 'new') { cls = 'warn'; label = `站点新上 ${sc.new_count || 0}`; }
+  else if (sc.state === 'avail') {
+    cls = 'info'; label = `可补 ${sc.fresh_count || 0}/${sc.sub_count || 0}`;
+  } else if (sc.state === 'known') { cls = 'ok'; label = `已有 ${sc.sub_count || 0}`; }
+  else if (sc.state === 'none') { label = '站点暂无'; }
+  else if (sc.state === 'error') { cls = 'err'; label = '复查失败'; }
+  const msg = sc.state === 'error' ? (sc.message || '复查失败') : '';
+  const when = missCheckedAt(sc.checked_at);
+  const titles = (sc.titles || []).map(missTitleText).filter(Boolean);
+  const head = [when, ...titles].filter(Boolean).join(' · ');
+  const brief = [when, ...titles.slice(0, 2)].filter(Boolean).join(' · ');
+  return `<td class="nowrap">
+      <span class="badge ${cls}"${msg ? ` title="${esc(msg)}"` : ''}>${esc(label)}</span>
+      ${brief ? `<div class="ellip muted mono" style="font-size:11px;max-width:200px"
+          title="${esc(head)}">${esc(brief)}</div>` : ''}
+    </td>`;
 }
 
 function renderMissing() {
   const body = $('miss-body');
-  const rows = S.missing.items || [];
+  const rows = missVisibleItems();
+  const newOnly = $('miss-new-only').checked;
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="7" class="empty">'
-      + (S.missing.loading ? '检查中…' : '没有缺字幕的种子（或尚未检查）') + '</td></tr>';
+    let msg = '没有缺字幕的种子（或尚未检查）';
+    if (S.missing.loading) msg = '检查中…';
+    else if (newOnly && (S.missing.items || []).length) msg = '当前没有「新上字幕」的种子';
+    body.innerHTML = `<tr><td colspan="8" class="empty">${msg}</td></tr>`;
     updateMissPicked();
     return;
   }
@@ -1147,6 +1200,7 @@ function renderMissing() {
         ? `<span class="badge info">${esc(it.site_label || it.site_id)}</span>
            <div class="muted mono" style="font-size:11px">tid=${esc(it.torrent_id)}</div>`
         : '<span class="badge">未匹配站点</span>'}</td>
+      ${missSiteCell(it)}
       <td><div class="ellip mono" style="font-size:11px"
                title="${esc(it.root || it.save_path)}">${esc(it.root || it.save_path || '-')}</div></td>
     </tr>`;
@@ -1164,13 +1218,15 @@ function renderMissing() {
 
 function updateMissPicked() {
   const all = missSelectable();
-  $('miss-picked').textContent = `已选 ${S.missing.picked.size} 个种子`;
+  const visiblePicked = missVisibleItems().filter(
+    (it) => S.missing.picked.has(missKey(it))).length;
+  $('miss-picked').textContent = `已选 ${visiblePicked} 个种子`;
   $('miss-all').checked = all.length > 0
     && all.every((it) => S.missing.picked.has(missKey(it)));
 }
 
 async function loadMissing() {
-  if (S.missing.loading) return;
+  if (S.missing.loading || S.missing.probing) return;
   const btn = $('btn-miss-scan');
   S.missing.loading = true;
   btn.disabled = true;
@@ -1211,6 +1267,118 @@ async function loadMissing() {
     S.missing.loading = false;
     btn.disabled = false;
     renderMissing();
+  }
+}
+
+/* ---- 站点复查：提交任务后每 1500ms 轮询 /api/missing/probe/state ---- */
+
+function missProbeStat(text) {
+  $('miss-probe-stat').textContent = text;
+}
+
+function missProbeFinish() {
+  if (S.missing.probeTimer) clearTimeout(S.missing.probeTimer);
+  S.missing.probeTimer = null;
+  S.missing.probing = false;
+  $('btn-miss-probe').disabled = false;
+  $('btn-miss-scan').disabled = false;
+}
+
+function missProbeSchedule() {
+  if (S.missing.probeTimer) clearTimeout(S.missing.probeTimer);
+  S.missing.probeTimer = setTimeout(missProbeTick, 1500);
+}
+
+// 复查完成后用 result.items 替换清单，并刷新第一张卡片的汇总/错误行
+function missApplyProbeSummary(r) {
+  const items = r.items || [];
+  const s = r.summary || {};
+  S.missing.items = items;
+  S.missing.picked = new Set();
+  $('miss-badge').className = 'badge ' + (items.length ? 'warn' : 'ok');
+  $('miss-badge').textContent = `${items.length} 个种子`;
+  $('miss-stat').textContent =
+    `复查 ${s.probed || 0} 个种子 · 新上 ${s.new_on_site || 0} · `
+    + `可补 ${s.available || 0} · 暂无 ${s.none || 0} · 已有 ${s.known || 0}`
+    + (s.errors ? ` · 失败 ${s.errors}` : '')
+    + ` · 列出 ${items.length} 个种子`;
+  $('miss-elapsed').textContent = fmtDuration(r.elapsed_ms);
+  $('miss-hint').textContent =
+    `${r.days > 0 ? '窗口 ' + r.days + ' 天' : '不限时间'} · 目录深度 ${r.max_depth} · `
+    + `单目录上限 ${r.max_files}`;
+  const errs = (r.errors || []).slice();
+  if (r.probe_truncated) errs.push('复查数量已达上限，其余条目未复查');
+  $('miss-errors').innerHTML = errs.map((x) => `· ${esc(x)}`).join('<br>');
+  renderMissing();
+}
+
+async function missProbeTick() {
+  if (!S.missing.probing) return;
+  try {
+    const d = await api('/api/missing/probe/state');
+    if (d.running) {
+      const pct = d.total ? `${d.progress || 0}/${d.total}` : String(d.progress || 0);
+      missProbeStat(`复查中 · ${d.phase || '进行中'} · ${pct}`);
+      missProbeSchedule();
+      return;
+    }
+    const r = d.result;
+    if (!r) {
+      missProbeStat('复查已结束，但没有返回结果');
+      toast('复查结束但未返回结果', 'err');
+      missProbeFinish();
+      return;
+    }
+    if (r.ok === false) {
+      const msg = (r.errors && r.errors[0]) || '站点复查失败';
+      missProbeStat('复查失败：' + msg);
+      toast(msg, 'err');
+      missProbeFinish();
+      return;
+    }
+    const s = r.summary || {};
+    missApplyProbeSummary(r);
+    missProbeStat(`复查完成 · ${s.probed || 0} 个种子 · 用时 ${fmtDuration(r.elapsed_ms)}`
+      + (r.probe_truncated ? ' · 已达复查上限' : '')
+      + (r.truncated ? ' · 结果已截断' : ''));
+    toast(`站点新上 ${s.new_on_site || 0} · 可补 ${s.available || 0} · 暂无 ${s.none || 0}`);
+    missProbeFinish();
+  } catch (e) {
+    missProbeStat('复查失败：' + e.message);
+    toast(e.message, 'err');
+    missProbeFinish();
+  }
+}
+
+async function probeMissing() {
+  if (S.missing.probing || S.missing.loading) return;
+  const input = Number($('miss-probe-limit').value);
+  const probeLimit = Number.isFinite(input) ? Math.max(0, Math.trunc(input)) : 50;
+  S.missing.probing = true;
+  $('btn-miss-probe').disabled = true;
+  $('btn-miss-scan').disabled = true;
+  missProbeStat('正在提交复查任务…');
+  try {
+    // 筛选参数与 loadMissing 保持一致，只多带复查上限
+    await api('/api/missing/probe', {
+      method: 'POST',
+      body: {
+        days: Number($('miss-days').value) || 0,
+        downloader: '',
+        category: '',
+        keyword: $('miss-keyword').value.trim(),
+        limit: Number($('miss-limit').value) || 0,
+        only_site_matched: $('miss-matched').checked,
+        probe_limit: probeLimit,
+        refresh_cookie: false,
+      },
+    });
+    missProbeStat('复查中 · 等待结果…');
+    missProbeSchedule();
+  } catch (e) {
+    missProbeStat('复查失败：' + e.message);
+    toast(e.message, 'err');
+    missProbeFinish();
   }
 }
 

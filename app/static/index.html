@@ -376,6 +376,16 @@
           <button class="btn primary" style="margin-top:18px" id="btn-miss-scan">
             <svg><use href="#i-search"/></svg>开始检查
           </button>
+          <label class="field" style="margin:0;width:130px">
+            <span>复查上限<em>0 = 全部</em></span>
+            <input type="number" id="miss-probe-limit" min="0" value="50">
+          </label>
+          <button class="btn" style="margin-top:18px" id="btn-miss-probe">
+            <svg><use href="#i-refresh"/></svg>复查站点字幕
+          </button>
+          <label class="switch" style="margin-top:18px">
+            <input type="checkbox" id="miss-new-only"><span class="track"></span><span>只看新上字幕</span>
+          </label>
           <span class="spacer"></span>
           <span class="muted mono" id="miss-elapsed" style="font-size:12px"></span>
         </div>
@@ -385,11 +395,16 @@
             <span class="badge" id="miss-badge">未检查</span>
             <span class="muted" id="miss-stat" style="font-size:12px">点击「开始检查」扫描本地视频文件</span>
           </div>
+          <div class="muted mono" id="miss-probe-stat" style="font-size:12px;margin-top:6px;line-height:1.6"></div>
           <div id="miss-errors" class="muted" style="font-size:12px;margin-top:9px;line-height:1.7"></div>
         </div>
         <div class="muted" style="font-size:12px;margin-top:8px;line-height:1.7">
           判定规则：视频同目录、Subs/Subtitles 子目录或同名子目录里，存在同名素材
           （<span class="mono">视频名.srt</span> / <span class="mono">视频名.chs.ass</span>）即视为已有字幕。
+          <br>
+          「复查站点字幕」会按上面的筛选条件逐个抓站点详情页，找出
+          <b>之前站点没有、现在补上了</b>的字幕（首次复查没有基线，只报「可补」不报「新上」）；
+          复查结果会存成快照，下次打开清单直接显示上次结论。
         </div>
       </div>
 
@@ -416,10 +431,11 @@
               <th class="nowrap">缺失字幕</th>
               <th class="nowrap">加入时间</th>
               <th class="nowrap">站点 / 种子</th>
+              <th class="nowrap">站点字幕</th>
               <th>保存路径</th>
             </tr></thead>
             <tbody id="miss-body">
-              <tr><td colspan="7" class="empty">尚未检查，点击上方「开始检查」</td></tr>
+              <tr><td colspan="8" class="empty">尚未检查，点击上方「开始检查」</td></tr>
             </tbody>
           </table>
         </div>

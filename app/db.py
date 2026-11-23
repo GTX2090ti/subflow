@@ -211,6 +211,24 @@ def log_tail(limit=200):
     return list(reversed(rows))
 
 
+def log_query_tail(level=None, keyword=None, limit=200):
+    """带过滤的最近 N 条，按 id 升序返回，供移动端首屏直接显示尾部日志。
+
+    ``log_query(since_id=0)`` 取的是**最早**的一批，首屏用它会看不到最新日志。
+    """
+    sql = "SELECT id, ts, level, source, job_id, message FROM logs WHERE 1=1"
+    params = []
+    if level and level.upper() != "ALL":
+        sql += " AND level = ?"
+        params.append(level.upper())
+    if keyword:
+        sql += " AND message LIKE ?"
+        params.append("%" + keyword + "%")
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(int(limit))
+    return list(reversed(_query(sql, params)))
+
+
 def log_clear(keep_last=0):
     """清空日志；keep_last>0 时仅保留最近 N 条。返回删除行数。"""
     if keep_last and int(keep_last) > 0:
@@ -611,6 +629,47 @@ def load_categories():
     except (TypeError, ValueError):
         return None
     if not isinstance(data, dict) or not isinstance(data.get("downloaders"), list):
+        return None
+    return data
+
+
+# ---------------------------------------------------------------- 缺字幕复查快照
+#
+# 「缺字幕清单」本身只读本地文件，但站点上有没有补字幕必须抓详情页才知道。
+# 复查结果按「下载器 + 种子哈希」存成快照，这样清单每次打开都能直接显示
+# 「上次复查看到什么」，而不必每刷一次清单就打一遍站点。
+# 结构：{"saved_at": str, "items": {key: {state, sub_count, new_count,
+#        fresh_count, checked_at, message, titles}}}
+
+MISSING_PROBE_KV = "missing_probe_snapshot"
+MISSING_PROBE_KEEP = 5000
+
+
+def save_missing_probe(data):
+    """存复查快照。items 超过上限时按 checked_at 从旧到新丢弃。"""
+    if not isinstance(data, dict):
+        return
+    items = data.get("items")
+    if not isinstance(items, dict):
+        items = {}
+    if len(items) > MISSING_PROBE_KEEP:
+        ordered = sorted(items.items(),
+                         key=lambda kv: str((kv[1] or {}).get("checked_at") or ""))
+        items = dict(ordered[-MISSING_PROBE_KEEP:])
+    kv_set(MISSING_PROBE_KV,
+           json.dumps({"saved_at": data.get("saved_at") or now_str(),
+                       "items": items}, ensure_ascii=False))
+
+
+def load_missing_probe():
+    raw = kv_get(MISSING_PROBE_KV)
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("items"), dict):
         return None
     return data
 

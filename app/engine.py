@@ -145,6 +145,9 @@ class SubtitleEngine:
         self._site_status = {}
         self._scan_state = {"running": False, "phase": "", "progress": 0,
                             "total": 0, "started_at": None, "result": None}
+        # 缺字幕清单的「站点复查」进度（与扫描分开，两者可以各看各的）
+        self._probe_state = {"running": False, "phase": "", "progress": 0,
+                             "total": 0, "started_at": None, "result": None}
         self._sched_stop = threading.Event()
         self._sched_thread = None
         self._session = threading.local()
@@ -1359,6 +1362,9 @@ class SubtitleEngine:
         cat = (category or "").strip()
         kw = (keyword or "").strip().lower()
         adapters = sites.all_sites()
+        # 上次站点复查的结论：清单本身不抓站点，但要把「上次复查看到什么」带出来，
+        # 否则用户每次都得重跑一遍复查才知道站点到底有没有补字幕。
+        probe_items = (db.load_missing_probe() or {}).get("items") or {}
         cache = {}
         limit = max(1, int(limit or 200))
         stop = False
@@ -1450,6 +1456,9 @@ class SubtitleEngine:
                     "missing_count": len(missing),
                     "missing": missing[:50],
                     "added_on": added,
+                    "site_check": (self._probe_public(
+                        probe_items.get(self._probe_key(dl.did, t, name)))
+                        if site_id else None),
                 }
                 out["items"].append(item)
                 if len(out["items"]) >= limit:
@@ -1463,6 +1472,289 @@ class SubtitleEngine:
             % (out["scanned_torrents"], out["checked_videos"], out["missing_videos"],
                len(out["items"]), out["skipped_dirs"], out["elapsed_ms"] / 1000.0),
             SRC_SCAN)
+        return out
+
+    # ------------------------------------------------------------ 站点复查
+    #
+    # 「缺字幕清单」判定的是**本地文件**：视频旁边没有字幕。但站点上有没有补
+    # 这个种子缺的字幕，只有抓一次详情页才知道 —— 这正是本段要做的事：
+    # 拿清单里的条目按 (站点, 种子) 复查详情页，判断「之前没有、现在有了」。
+    #
+    # 与扫描的区别：扫描会给新字幕包直接建任务；复查**只读不写**，只产出结论，
+    # 是否下载由用户看过清单后再决定（复用 missing_repair / 扫描链路）。
+
+    @staticmethod
+    def _probe_key(downloader_id, torrent, name=""):
+        """复查快照的键：优先用种子哈希，退化为「下载器 + 名称」。"""
+        h = str((torrent or {}).get("hash") or "").strip().lower()
+        if h:
+            return h
+        return "%s|%s" % (downloader_id or "", name or (torrent or {}).get("name") or "")
+
+    def probe_state(self):
+        with self._lock:
+            return dict(self._probe_state)
+
+    def _probe_progress(self, phase, done, total):
+        with self._lock:
+            self._probe_state.update(phase=phase, progress=done, total=total)
+
+    def begin_probe(self, days=None):
+        """
+        抢占复查状态位。返回 (是否抢到, 拒绝原因)。
+
+        **必须在启动后台线程之前同步调用**：否则接口已经返回、前端 1.5s 后
+        来轮询时 running 还是 False，会读到上一次的 result 而提前结束。
+        """
+        with self._lock:
+            if self._probe_state.get("running"):
+                return False, "已有站点复查在进行中，请等待完成"
+            if self._scan_state.get("running"):
+                return False, "正在扫描种子库，请等扫描结束后再复查"
+            self._probe_state = {"running": True, "phase": "启动", "progress": 0,
+                                 "total": 0, "started_at": db.now_str(),
+                                 "result": None, "days": days}
+            return True, ""
+
+    def missing_probe(self, days=None, downloader_id=None, category="", keyword="",
+                      limit=200, only_site_matched=False, probe_limit=50,
+                      refresh_cookie=False):
+        """
+        对缺字幕清单里的条目逐个复查站点详情页，找出「之前没有、现在有」的字幕。
+
+        * 先复用 ``missing_scan()`` 得到清单（同样支持窗口 / 分类 / 关键词筛选），
+          所以复查与清单看到的是同一批种子，不会各说各话。
+        * ``probe_limit`` 限制**实际抓取**的条目数（0 = 全部），因为每个条目
+          都要发一次详情页请求；清单本身仍按 ``limit`` 全量返回。
+        * ``refresh_cookie`` 为真时先强制刷新 CookieCloud，适合批量复查前用。
+
+        判定口径（``site_check.state``）：
+
+            new    这次站点上出现了**上次快照里没有的 subid**（站点后来补传的包），
+                   且其中有还没下载过的
+                   —— 也就是「之前没有字幕、现在有了」
+            avail  站点有字幕包且存在未下载的，但都是上次就已有的包
+                   （一直没补下的老包，不算新上）
+            known  站点有的字幕包都已经成功下载过
+            none   站点详情页上没有字幕包
+            error  详情页抓取失败 / Cookie 失效等，见 message
+
+        「新上」必须靠上一次复查做基线：判定依据是**本次 subid 集合减去上次的**，
+        首次复查没有基线，一律不算 new（否则会把积压很久的老包误报成站点刚补的）。
+
+        返回统计 dict（含全量 items，前端可直接替换清单）。
+        """
+        self.reload_config()
+        t0 = time.time()
+        out = {"ok": True, "items": [], "errors": [], "elapsed_ms": 0,
+               "days": 0, "scanned_torrents": 0, "checked_videos": 0,
+               "missing_videos": 0, "max_depth": 0, "max_files": 0,
+               "truncated": False, "probe_truncated": False,
+               "summary": {"probed": 0, "with_subs": 0, "new_on_site": 0,
+                           "available": 0, "none": 0, "known": 0, "errors": 0,
+                           "sites": {}}}
+
+        try:
+            base = self.missing_scan(days=days, downloader_id=downloader_id,
+                                     category=category, keyword=keyword,
+                                     limit=limit,
+                                     only_site_matched=only_site_matched)
+            for k in ("days", "scanned_torrents", "checked_videos", "missing_videos",
+                      "max_depth", "max_files", "truncated"):
+                out[k] = base.get(k)
+            out["errors"].extend(base.get("errors") or [])
+            if base.get("ok") is False:
+                out.update(ok=False)
+                out["errors"] = base.get("errors") or ["缺字幕清单获取失败"]
+                out["elapsed_ms"] = int((time.time() - t0) * 1000)
+                return out
+
+            items = [dict(x) for x in (base.get("items") or [])]
+            self._probe_progress("准备复查", 0, len(items))
+
+            # 能复查的条目：必须能反查到站点（否则无从抓详情页）
+            candidates = [x for x in items if x.get("site_id") and x.get("torrent_id")]
+            try:
+                cap = int(probe_limit or 0)
+            except (TypeError, ValueError):
+                cap = 0
+            if cap > 0 and len(candidates) > cap:
+                candidates = candidates[:cap]
+                out["probe_truncated"] = True
+
+            if not candidates:
+                out["items"] = items
+                out["elapsed_ms"] = int((time.time() - t0) * 1000)
+                log("INFO", "站点复查：清单 %d 条，其中没有可反查站点的条目"
+                    % len(items), SRC_SCAN)
+                return out
+
+            # 上次快照：用来算出「本次新出现的 subid」。规则见 _probe_added()：
+            # 没有基线（首次复查）或老快照没有 subids 字段时一律不报「新上」，
+            # 宁可漏报也不把积压的老包误报成站点刚补的。
+            prev = (db.load_missing_probe() or {}).get("items") or {}
+            snapshot = dict(prev)
+            interval = float(self._dl.get("req_interval", 1.5))
+            cookies = {}
+            site_stats = out["summary"]["sites"]
+
+            for i, it in enumerate(candidates, 1):
+                sid = str(it.get("site_id") or "")
+                tid = str(it.get("torrent_id") or "")
+                name = (it.get("name") or "")[:120]
+                self._probe_progress("复查 (%s)" % (it.get("site_label") or sid), i,
+                                     len(candidates))
+                st = site_stats.setdefault(sid, {"label": it.get("site_label") or sid,
+                                                 "probed": 0, "with_subs": 0,
+                                                 "new_on_site": 0, "errors": 0})
+                adapter = sites.get(sid)
+                if not adapter:
+                    it["site_check"] = self._probe_result(
+                        "error", 0, 0, 0, "未知站点：%s" % sid)
+                    out["summary"]["errors"] += 1
+                    st["errors"] += 1
+                    continue
+
+                if sid not in cookies:
+                    cookie, cerr = self.cookie_for(adapter, force=refresh_cookie)
+                    cookies[sid] = cookie
+                    if cerr:
+                        log("ERROR", "[%s] Cookie 不可用：%s" % (adapter.label, cerr),
+                            SRC_CC)
+                cookie = cookies.get(sid)
+                if not cookie:
+                    it["site_check"] = self._probe_result(
+                        "error", 0, 0, 0, "Cookie 不可用，无法复查")
+                    out["summary"]["errors"] += 1
+                    st["errors"] += 1
+                    continue
+
+                out["summary"]["probed"] += 1
+                st["probed"] += 1
+                html, herr = self.fetch_detail(adapter, tid, cookie)
+                if html is None:
+                    msg = ("Cookie 已失效" if herr == "cookie"
+                           else "详情页获取失败（%s）" % (herr or "未知"))
+                    it["site_check"] = self._probe_result("error", 0, 0, 0, msg)
+                    out["summary"]["errors"] += 1
+                    st["errors"] += 1
+                    log("WARN", "[%s] 复查失败 tid=%s：%s" % (adapter.label, tid, msg),
+                        SRC_SCAN)
+                    if herr == "cookie":
+                        cookies[sid] = None
+                    time.sleep(interval)
+                    continue
+                time.sleep(interval)
+
+                subs = adapter.parse_subtitles(html, tid) or []
+                subids = [str(s[0]) for s in subs]
+                titles = [str(s[1]) for s in subs if len(s) > 1 and s[1]]
+                known = db.known_subids(sid, tid)
+                fresh = [x for x in subids if x not in known]
+
+                key = self._probe_key(it.get("downloader_id"), it, name)
+                before = prev.get(key)
+                # 「站点新补的包」= 这次有、上次快照里没有的 subid。
+                # 只比状态字面（none/known）会漏掉「上次就是 avail、这次又多传了一个」
+                # 这种情况，所以按 subid 集合比，判定才准。
+                added = self._probe_added(subids, before)
+                new_seen = [x for x in fresh if x in added]
+
+                if not subids:
+                    state = "none"
+                    out["summary"]["none"] += 1
+                else:
+                    out["summary"]["with_subs"] += 1
+                    st["with_subs"] += 1
+                    if new_seen:
+                        state = "new"
+                        out["summary"]["new_on_site"] += 1
+                        st["new_on_site"] += 1
+                        log("INFO", "[%s] %s：站点新上 %d 个字幕包（共 %d 个）"
+                            % (adapter.label, name, len(new_seen), len(subids)),
+                            SRC_SCAN)
+                    elif fresh:
+                        state = "avail"
+                        out["summary"]["available"] += 1
+                    else:
+                        state = "known"
+                        out["summary"]["known"] += 1
+
+                check = self._probe_result(state, len(subids), len(fresh),
+                                           len(subids) - len(fresh), "", titles,
+                                           subids, new_count=len(new_seen))
+                it["site_check"] = check
+                snapshot[key] = check
+
+            # 返回给前端的结论去掉内部基线字段（subids），快照里仍保留
+            for x in items:
+                x["site_check"] = self._probe_public(x.get("site_check"))
+            out["items"] = items
+            db.save_missing_probe({"saved_at": db.now_str(), "items": snapshot})
+            out["elapsed_ms"] = int((time.time() - t0) * 1000)
+            s = out["summary"]
+            log("INFO", "=== 站点复查完成：清单 %d 条 / 复查 %d 条，"
+                        "新上 %d，可补 %d，暂无 %d，已下载 %d，失败 %d，耗时 %.1fs ==="
+                % (len(items), s["probed"], s["new_on_site"], s["available"],
+                   s["none"], s["known"], s["errors"], out["elapsed_ms"] / 1000.0),
+                SRC_SCAN)
+            return out
+        except Exception as e:  # noqa: BLE001
+            out.update(ok=False)
+            out["errors"].append("站点复查失败：%s" % _short(e))
+            out["elapsed_ms"] = int((time.time() - t0) * 1000)
+            log("ERROR", "站点复查失败：%s" % e, SRC_SCAN)
+            return out
+        finally:
+            with self._lock:
+                self._probe_state["running"] = False
+                self._probe_state["phase"] = "完成" if out.get("ok") else "失败"
+                self._probe_state["result"] = out
+
+    @staticmethod
+    def _probe_result(state, sub_count, fresh_count, known_count, message="",
+                      titles=None, subids=None, new_count=None):
+        """构造单条复查结论。字段名与前端 site_check 契约一致。"""
+        return {
+            "state": state,
+            "sub_count": int(sub_count or 0),
+            # new_count：站点新补且未下载的包数（只有 new 态有意义）
+            "new_count": int(new_count if new_count is not None
+                             else (fresh_count if state == "new" else 0)),
+            "fresh_count": int(fresh_count or 0),
+            "known_count": int(known_count or 0),
+            "checked_at": db.now_str(),
+            "message": message or "",
+            "titles": [str(x) for x in (titles or [])][:10],
+            # 记下这次站点上有哪些 subid：下次复查靠它算出「这次新出现了哪些包」。
+            # 只存状态字面不行——「上次 avail、这次又多一个」也要能识别成新上。
+            "subids": [str(x) for x in (subids or [])][:200],
+        }
+
+    @staticmethod
+    def _probe_added(subids, before):
+        """
+        这次比上次快照多出来的 subid 集合（站点新补的包）。
+
+        * 没有基线（首次复查）      -> 空集：不猜，首次只报「可补」，不报「新上」
+        * 上次快照没有 subids 字段  -> 空集：老版本快照无法比对，宁可漏报不误报
+        * 否则                     -> 本次 subid 集合 - 上次 subid 集合
+        """
+        if not isinstance(before, dict):
+            return set()
+        old = before.get("subids")
+        if not isinstance(old, list):
+            return set()
+        old_set = {str(x) for x in old}
+        return {str(x) for x in (subids or []) if str(x) not in old_set}
+
+    @staticmethod
+    def _probe_public(rec):
+        """给前端看的复查结论：去掉 subids（那是内部基线，不需要传给浏览器）。"""
+        if not isinstance(rec, dict):
+            return None
+        out = dict(rec)
+        out.pop("subids", None)
         return out
 
     def missing_repair(self, items, auto_run=True):

@@ -24,6 +24,8 @@ GET    /api/schedule              定时扫描状态
 GET    /api/stats                 统计聚合（每日 / 站点 / 分类 / 失败原因）
 GET    /api/missing               缺字幕清单（以本地视频文件为准）
 POST   /api/missing/repair        批量补字幕（复用提交链路）
+POST   /api/missing/probe         站点复查：找「之前没有、现在站点有了」的字幕
+GET    /api/missing/probe/state   复查进度与结果（前端轮询）
 POST   /api/submit                手动提交任务
 POST   /api/zone/list             读取站点字幕区（站点级字幕来源）
 POST   /api/zone/submit           提交选中的字幕区条目
@@ -49,6 +51,7 @@ import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -138,6 +141,20 @@ async def basic_auth(request: Request, call_next):
                                      % (cfg.get("realm") or "SubFlow")})
 
 
+# 移动端页面在 ArkWeb 虚拟域（https://subflow.local）下运行时，若原生 HTTP 桥
+# 注册失败会退化为 fetch，直连局域网 API 属于跨域请求。这里只放行该来源；
+# 页面由服务端直接托管（/m，同源）时不需要 CORS。
+# 必须在 basic_auth 之后注册：Starlette 后注册的中间件在最外层，
+# 否则 OPTIONS 预检会先被鉴权中间件挡成 401。
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://subflow.local"],
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=600,
+)
+
+
 # ================================================================ 系统
 
 @app.get("/api/overview")
@@ -151,6 +168,12 @@ def api_overview():
 @app.get("/api/health")
 def api_health():
     return ok(**engine.health())
+
+
+@app.get("/api/ping")
+def api_ping():
+    """轻量探针：局域网自动发现只读这个，不触发下载器 / CookieCloud 探测。"""
+    return ok(version=APP_VERSION)
 
 
 @app.get("/api/stats")
@@ -272,6 +295,48 @@ def api_missing_repair(req: MissingRepairReq):
     res = engine.missing_repair([i.model_dump() for i in req.items],
                                 auto_run=req.auto_run)
     return res if res.get("ok") is False else ok(**res)
+
+
+# ---- 站点复查：找出「之前没有字幕、现在站点有了」的种子 ----
+#
+# 缺字幕清单只读本地文件，站点上有没有补字幕必须抓详情页。这一对接口把它做成
+# 后台任务：POST 只负责抢占状态位并起线程，GET 给前端轮询进度与最终结果。
+# 与 /api/scan 的区别是它**只读不写**（不建任务），结论回给用户自己决定。
+
+class MissingProbeReq(BaseModel):
+    days: int | None = None
+    downloader: str = ""
+    category: str = ""
+    keyword: str = ""
+    limit: int = 200
+    only_site_matched: bool = False
+    # 实际抓取详情页的条目上限（0 = 全部）。每条一次站点请求，别一上来就全量。
+    probe_limit: int = 50
+    refresh_cookie: bool = False
+
+
+@app.post("/api/missing/probe")
+def api_missing_probe(req: MissingProbeReq):
+    started, reason = engine.begin_probe(days=req.days)
+    if not started:
+        return err(reason)
+    kwargs = dict(days=req.days,
+                  downloader_id=req.downloader or None,
+                  category=req.category or "",
+                  keyword=req.keyword or "",
+                  limit=req.limit, only_site_matched=req.only_site_matched,
+                  probe_limit=req.probe_limit,
+                  refresh_cookie=req.refresh_cookie)
+    threading.Thread(target=engine.missing_probe, kwargs=kwargs,
+                     name="subflow-probe", daemon=True).start()
+    log("INFO", "站点复查已提交（后台执行，抓取上限 %s）"
+        % (req.probe_limit if req.probe_limit else "不限"), SRC_SYS)
+    return ok(message="站点复查已启动")
+
+
+@app.get("/api/missing/probe/state")
+def api_missing_probe_state():
+    return ok(**engine.probe_state())
 
 
 # ================================================================ 手动提交
@@ -441,9 +506,19 @@ def api_history_export(site: str = "all", status: str = "all", keyword: str = ""
 
 @app.get("/api/logs")
 def api_logs(since_id: int = 0, level: str = "ALL", source: str = "all",
-             keyword: str = "", limit: int = 500):
-    rows, last_id = db.log_query(level=level, source=source, since_id=since_id,
-                                 limit=limit, keyword=keyword or None)
+             keyword: str = "", limit: int = 500, tail: bool = False):
+    """日志拉取。
+
+    ``tail=true`` 且不带游标时返回**最近** N 条（移动端首屏用）；
+    默认仍是从 ``since_id`` 之后的增量，保持桌面端游标语义不变。
+    """
+    if tail and not since_id:
+        rows = db.log_query_tail(level=level, keyword=keyword or None,
+                                 limit=min(int(limit or 200), 1000))
+        last_id = rows[-1]["id"] if rows else 0
+    else:
+        rows, last_id = db.log_query(level=level, source=source, since_id=since_id,
+                                     limit=limit, keyword=keyword or None)
     return ok(logs=rows, last_id=last_id,
               sources=db.log_sources(),
               levels=["ALL", "INFO", "WARN", "ERROR", "FATAL"])
@@ -584,3 +659,9 @@ async def unhandled(request: Request, exc: Exception):  # pragma: no cover
 
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# 移动端单页：/m/ 与 /m 下的相对资源。与 HAP 内打包的模板保持同一套文件，
+# 浏览器可直接访问用于联调（同源，无需 CORS）。
+MOBILE_DIR = os.path.join(STATIC_DIR, "m")
+if os.path.isdir(MOBILE_DIR):
+    app.mount("/m", StaticFiles(directory=MOBILE_DIR, html=True), name="mobile")

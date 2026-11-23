@@ -2,3 +2,8 @@ data/
 __pycache__/
 *.pyc
 *.bak.*
+.venv/
+.local-test/
+
+# 本机 SDK 路径（DevEco Studio），随机器而异，不应进仓库
+mobile/harmony/local.properties

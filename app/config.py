@@ -23,7 +23,7 @@ import os
 import threading
 
 APP_NAME = "SubFlow"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.getenv("SUBFLOW_CONFIG_FILE", os.path.join(BASE_DIR, "config.json"))

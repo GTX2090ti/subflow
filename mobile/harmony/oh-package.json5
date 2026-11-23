@@ -1,0 +1,10 @@
+{
+  "modelVersion": "5.1.0",
+  "name": "subflow_mobile",
+  "version": "1.1.0",
+  "description": "SubFlow mobile companion, ArkWeb container shell.",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {}
+}
